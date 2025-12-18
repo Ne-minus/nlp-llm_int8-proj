@@ -11,6 +11,8 @@ from typing import Optional, Dict, List
 from enum import Enum
 from tqdm import tqdm
 import gc
+import math
+import sys
 
 
 OUTLIER_THRESHOLD = 6.0
@@ -209,7 +211,7 @@ def convert_model(
                 if child.bias is not None:
                     new_layer.bias.copy_(child.bias)
             
-            setattr(module, name, new_layer)
+            setattr(model, name, new_layer)
         else:
             convert_model(child, quant_method, threshold, skip_patterns)
     
@@ -375,18 +377,81 @@ def compute_perplexity_simple(
         "avg_loss": avg_loss,
     }
 
+def clear_memory():
+    """Агрессивная очистка памяти"""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
+def evaluate_perplexity(model, tokenizer, dataset_name="Salesforce/wikitext", 
+                           name="wikitext-2-raw-v1", split="test", max_length=512):
+        """Измерение perplexity"""
+        print(f"Measuring perplexity on {dataset_name}...")
+        
+        ds = load_dataset(dataset_name, name, split=split, streaming=False)
+        
+        model.eval()
+        device = next(model.parameters()).device
+        
+        total_loss = 0.0
+        total_tokens = 0
+        batch_size = 1  # Уменьшил для экономии памяти
+        
+        with torch.no_grad():
+            for i in tqdm(range(0, len(ds), batch_size), desc="Perplexity"): 
+                batch_texts = [ds[j]['text'] for j in range(i, min(i+batch_size, len(ds)))]
+                batch_texts = [text for text in batch_texts if text and text.strip()]
+                if not batch_texts:
+                    continue
+                
+                inputs = tokenizer(
+                    batch_texts, return_tensors="pt", truncation=True,
+                    max_length=max_length, padding=True
+                ).to(device)
+                
+                labels = inputs["input_ids"].clone()
+                labels[inputs["attention_mask"] == 0] = -100
+                
+                outputs = model(**inputs, labels=labels)
+                
+                batch_tokens = (labels != -100).sum().item()
+                total_loss += outputs.loss.item() * batch_tokens
+                total_tokens += batch_tokens
+                
+                # Очистка после каждого батча
+                del inputs, labels, outputs
+                clear_memory()
+        
+        ppl = math.exp(total_loss / total_tokens)
+
+
+        return {
+        "perplexity": ppl,
+        "total_tokens": total_tokens,
+    }
+
 
 # ============================================================
 # MAIN BENCHMARK
 # ============================================================
 
-def benchmark_wikitext():
+def benchmark_wikitext(size=0.6):
     """Full benchmark on WikiText-2"""
     print("=" * 70)
     print("WIKITEXT-2 PERPLEXITY BENCHMARK")
     print("FP16 vs Absmax (Symmetric) vs ZeroPoint (Asymmetric)")
     print("=" * 70)
+
+    wikitext = load_wikitext("wikitext", "wikitext-2-raw-v1", "test")
+
+    #sizes = [0.6, 1.7, 4, 8]
     
+    print(f"Model size: {size}")
+    #for size in tqdm(sizes):
+    MODEL_NAME = f"Qwen/Qwen3-{size}B"
+    print(MODEL_NAME)
+
     # Load tokenizer
     print("\n📥 Loading tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -394,58 +459,51 @@ def benchmark_wikitext():
         tokenizer.pad_token = tokenizer.eos_token
     
     # Load WikiText
-    wikitext = load_wikitext("wikitext", "wikitext-2-raw-v1", "test")
+    # wikitext = load_wikitext("wikitext", "wikitext-2-raw-v1", "test")
     
     results = {}
 
-    sizes = [0.6, 1.7, 4, 8]
-    
-    for size in sizes:
-        MODEL_NAME = f"Qwen/Qwen3-{size}B"
 
-        for method in [QuantMethod.NONE, QuantMethod.ABSMAX, QuantMethod.ZEROPOINT]:
-            print(f"\n{'='*60}")
-            print(f"📊 Method: {method.value.upper()}")
-            print("=" * 60)
-            
-            # Load model
-            print("📥 Loading model...")
-            model = AutoModelForCausalLM.from_pretrained(
-                MODEL_NAME,
-                torch_dtype=torch.float16,
-                device_map="auto",
-                trust_remote_code=True,
-            )
-            
-            # Convert if needed
-            if method != QuantMethod.NONE:
-                print(f"🔄 Converting to {method.value}...")
-                convert_model(model, method)
-            
-            model.eval()
-            
-            # Compute perplexity
-            print("🧮 Computing perplexity...")
-            result = compute_perplexity_wikitext(
-                model, 
-                tokenizer, 
-                wikitext,
-                max_length=MAX_LENGTH,
-                stride=STRIDE,
-            )
-            
-            results[method] = result
-            print(f"✅ {method.value.upper()} Perplexity: {result['perplexity']:.2f}")
-            
-            # Cleanup
-            del model
-            gc.collect()
-            torch.cuda.empty_cache()
+    for method in [QuantMethod.NONE, QuantMethod.ABSMAX, QuantMethod.ZEROPOINT]:
+        print(f"\n{'='*60}")
+        print(f"📊 Method: {method.value.upper()}")
+        print("=" * 60)
+        
+        # Load model
+        print("📥 Loading model...")
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        
+        # Convert if needed
+        if method != QuantMethod.NONE:
+            print(f"🔄 Converting to {method.value}...")
+            convert_model(model, method)
+        
+        model.eval()
+        
+        # Compute perplexity
+        print("🧮 Computing perplexity...")
+        result = evaluate_perplexity(
+            model, 
+            tokenizer
+        )
+        
+        results[method] = result
+        print(f"✅ {method.value.upper()} Perplexity: {result["perplexity"]:.2f}")
+        
+        # Cleanup
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
         
         # Print summary
         print_results_summary(results)
         
-        return results
+        # return results
 
 
 def print_results_summary(results: Dict):
@@ -648,11 +706,17 @@ def main():
         default="fp16",
         help="Method for single mode"
     )
+    parser.add_argument(
+        "--size",
+        choices=["0.6", "1.7", "4", "8"],
+        default="0.6",
+        help="qwen model size"
+    )
     
     args = parser.parse_args()
-    
+    size = args.size
     if args.mode == "full":
-        benchmark_wikitext()
+        benchmark_wikitext(size)
     elif args.mode == "quick":
         quick_test()
     elif args.mode == "single":

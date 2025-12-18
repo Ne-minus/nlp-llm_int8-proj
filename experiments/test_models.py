@@ -532,7 +532,7 @@ def main():
     quantizer = ModelQuantizer()
     
     # Загружаем модель
-    quantizer.load_model("Qwen/Qwen3-4B")
+    quantizer.load_model("Qwen/Qwen3-8B")
     
     # Запускаем все методы последовательно с перезагрузкой
     quantizer.run_all_methods(vector_size=64)
