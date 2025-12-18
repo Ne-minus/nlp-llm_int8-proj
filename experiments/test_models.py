@@ -414,19 +414,26 @@ class ModelQuantizer:
         self.quantization_stats[method] = stats
         return stats
     
-    def evaluate_perplexity(self, dataset_name="Salesforce/wikitext", 
-                           name="wikitext-2-raw-v1", split="test", max_length=512):
+    def evaluate_perplexity(self, dataset_name="allenai/c4", 
+                           name="realnewslike", split="validation", max_length=512):
         """Измерение perplexity"""
         print(f"Measuring perplexity on {dataset_name}...")
         
         ds = load_dataset(dataset_name, name, split=split, streaming=False)
+
+    #     dataset = load_dataset(
+    #     "allenai/c4", 
+    #     "realnewslike", 
+    #     split="validation",
+    #     streaming=True
+    # )
         
         self.model.eval()
         device = next(self.model.parameters()).device
         
         total_loss = 0.0
         total_tokens = 0
-        batch_size = 16  # Уменьшил для экономии памяти
+        batch_size = 1 # Уменьшил для экономии памяти
         
         with torch.no_grad():
             for i in tqdm(range(0, min(len(ds), 500), batch_size), desc="Perplexity"):  # Ограничил до 500
@@ -532,7 +539,7 @@ def main():
     quantizer = ModelQuantizer()
     
     # Загружаем модель
-    quantizer.load_model("Qwen/Qwen3-8B")
+    quantizer.load_model("Qwen/Qwen3-0.6B")
     
     # Запускаем все методы последовательно с перезагрузкой
     quantizer.run_all_methods(vector_size=64)

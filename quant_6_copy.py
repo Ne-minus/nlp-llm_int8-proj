@@ -396,7 +396,7 @@ def evaluate_perplexity(model, tokenizer, dataset_name="Salesforce/wikitext",
         
         total_loss = 0.0
         total_tokens = 0
-        batch_size = 1  # Уменьшил для экономии памяти
+        batch_size = 16  # Уменьшил для экономии памяти
         
         with torch.no_grad():
             for i in tqdm(range(0, len(ds), 500), desc="Perplexity"): 
@@ -460,31 +460,24 @@ def benchmark_wikitext(size=0.6):
     
     # Load WikiText
     # wikitext = load_wikitext("wikitext", "wikitext-2-raw-v1", "test")
-
-    # Load model
-    print("📥 Loading model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
     
     results = {}
+
 
     for method in [QuantMethod.NONE, QuantMethod.ABSMAX, QuantMethod.ZEROPOINT]:
         print(f"\n{'='*60}")
         print(f"📊 Method: {method.value.upper()}")
         print("=" * 60)
-                
+        
+        # Load model
+        print("📥 Loading model...")
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_NAME,
             torch_dtype=torch.float16,
             device_map="auto",
             trust_remote_code=True,
         )
-
-
+        
         # Convert if needed
         if method != QuantMethod.NONE:
             print(f"🔄 Converting to {method.value}...")

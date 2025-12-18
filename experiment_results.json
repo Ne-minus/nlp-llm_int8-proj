@@ -1,0 +1,46 @@
+[
+  {
+    "model": "Qwen/Qwen3-0.6B",
+    "params_b": 0.59604992,
+    "perplexity": 30.482497018873623,
+    "pct_emergent_dims": 100.0,
+    "pct_layer_dim_coverage": 59.835379464285715,
+    "n_emergent_dims": 1024,
+    "hidden_size": 1024,
+    "avg_pct_above_6": 10.361572265625,
+    "avg_pct_above_10": 4.561185359954834
+  },
+  {
+    "model": "Qwen/Qwen3-1.7B",
+    "params_b": 1.720574976,
+    "perplexity": 22.314370321729694,
+    "pct_emergent_dims": 100.0,
+    "pct_layer_dim_coverage": 89.87862723214286,
+    "n_emergent_dims": 2048,
+    "hidden_size": 2048,
+    "avg_pct_above_6": 27.643259048461914,
+    "avg_pct_above_10": 19.967041015625
+  },
+  {
+    "model": "Qwen/Qwen3-4B",
+    "params_b": 4.022468096,
+    "perplexity": 19.716330146697945,
+    "pct_emergent_dims": 100.0,
+    "pct_layer_dim_coverage": 55.109592013888886,
+    "n_emergent_dims": 2560,
+    "hidden_size": 2560,
+    "avg_pct_above_6": 4.993047714233398,
+    "avg_pct_above_10": 1.671265721321106
+  },
+  {
+    "model": "Qwen/Qwen3-8B",
+    "params_b": 8.19073536,
+    "perplexity": 14.816184762138962,
+    "pct_emergent_dims": 100.0,
+    "pct_layer_dim_coverage": 64.95632595486111,
+    "n_emergent_dims": 4096,
+    "hidden_size": 4096,
+    "avg_pct_above_6": 9.719032287597656,
+    "avg_pct_above_10": 4.468694686889648
+  }
+]
